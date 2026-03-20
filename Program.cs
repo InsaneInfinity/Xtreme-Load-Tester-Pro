@@ -13,59 +13,49 @@ namespace XtremeLoadTester
 {
     class Program
     {
-        private static readonly HttpClient client = new HttpClient(
-            new SocketsHttpHandler
-            {
-                PooledConnectionLifetime = TimeSpan.FromMinutes(10),
-                MaxConnectionsPerServer = 10000,
-                EnableMultipleHttp2Connections = true
-            });
+        private static readonly HttpClient client = new HttpClient(new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+            MaxConnectionsPerServer = 10000,
+            EnableMultipleHttp2Connections = true
+        });
 
         private static long totalRequests = 0;
         private static long successCount = 0;
         private static long errorCount = 0;
         private static readonly ConcurrentQueue<long> latencyQueue = new ConcurrentQueue<long>();
+        private static readonly ConcurrentDictionary<string, long> errorBreakdown = new ConcurrentDictionary<string, long>();
+
+        private static readonly string[] userAgents = new string[]
+        {
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/605.1.15"
+        };
+
+        private static void TrackError(string key) =>
+            errorBreakdown.AddOrUpdate(key, 1, (_, old) => old + 1);
 
         static async Task Main(string[] args)
         {
             Console.Clear();
             Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine("🚀 XTREME LOAD TESTER v4.1 | Professional Edition");
+            Console.WriteLine("🚀 XTREME LOAD TESTER v4.2.1 | Stable Release");
             Console.WriteLine("--------------------------------------------------");
             Console.ResetColor();
 
-            // POPRAWKA #2: TryParse zamiast Parse – nie rzuca wyjątku przy złym wejściu
-            Console.Write("🌐 Target URL: ");
-            string url = Console.ReadLine() ?? "https://example.com";
+            Console.Write("🌐 Target URL: "); string url = Console.ReadLine() ?? "https://example.com";
+            Console.Write("🛠 Method (GET/POST): "); string method = Console.ReadLine()?.ToUpper() ?? "GET";
+            Console.Write("🧵 Concurrent Workers: "); int.TryParse(Console.ReadLine(), out int workersCount);
+            if (workersCount <= 0) workersCount = 50;
 
-            Console.Write("🛠 Method (GET/POST): ");
-            string method = Console.ReadLine()?.ToUpper() ?? "GET";
+            Console.Write("⏱ Duration (seconds): "); int.TryParse(Console.ReadLine(), out int duration);
+            if (duration <= 0) duration = 30;
 
-            Console.Write("🧵 Concurrent Workers: ");
-            if (!int.TryParse(Console.ReadLine(), out int workersCount) || workersCount <= 0)
-            {
-                Console.WriteLine("[!] Nieprawidłowa wartość, użyto domyślnej: 50");
-                workersCount = 50;
-            }
-
-            Console.Write("⏱ Duration (seconds): ");
-            if (!int.TryParse(Console.ReadLine(), out int duration) || duration <= 0)
-            {
-                Console.WriteLine("[!] Nieprawidłowa wartość, użyto domyślnej: 30");
-                duration = 30;
-            }
-
-            Console.Write("⏳ Request Timeout (seconds, np. 10-20s dla wolnych serwerów): ");
-            if (!int.TryParse(Console.ReadLine(), out int timeoutSeconds) || timeoutSeconds <= 0)
-            {
-                Console.WriteLine("[!] Nieprawidłowa wartość, użyto domyślnej: 10s");
-                timeoutSeconds = 10;
-            }
-            // Ustawiamy timeout po inicjalizacji klienta – HttpClient pozwala na to przed pierwszym requestem
+            Console.Write("⏳ Request Timeout (seconds): "); int.TryParse(Console.ReadLine(), out int timeoutSeconds);
+            if (timeoutSeconds <= 0) timeoutSeconds = 15;
             client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
-
-            // POPRAWKA #3: Dodanie User-Agent – niektóre serwery odrzucają requesty bez UA
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("XtremeLoadTester/4.1");
 
             using var cts = new CancellationTokenSource();
             var sw = Stopwatch.StartNew();
@@ -74,7 +64,7 @@ namespace XtremeLoadTester
                 .Select(_ => Task.Run(() => DoWork(url, method, cts.Token)))
                 .ToList();
 
-            // Live stats w tle
+            // Monitoring Live
             _ = Task.Run(async () =>
             {
                 while (!cts.IsCancellationRequested)
@@ -82,35 +72,34 @@ namespace XtremeLoadTester
                     await Task.Delay(1000);
                     double elapsed = sw.Elapsed.TotalSeconds;
                     long reqs = Interlocked.Read(ref totalRequests);
-                    long succ = Interlocked.Read(ref successCount);
-                    long errs = Interlocked.Read(ref errorCount);
-                    double errPct = reqs > 0 ? (double)errs / reqs * 100.0 : 0.0;
-
-                    // POPRAWKA #4: Wyświetlanie % błędów obok live stats
-                    Console.Write($"\r[LIVE] RPS: {reqs / (elapsed > 0 ? elapsed : 1):F0} | " +
-                                  $"Success: {succ} | Errors: {errs} ({errPct:F1}%)   ");
+                    Console.Write($"\r[LIVE] RPS: {reqs / (elapsed > 0 ? elapsed : 1):F0} | Success: {Interlocked.Read(ref successCount)} | Errors: {Interlocked.Read(ref errorCount)}   ");
                 }
             });
 
-            Console.WriteLine("\n[!] Stress test running... Press any key to stop early.");
+            Console.WriteLine("\n[!] Test w toku... NACIŚNIJ DOWOLNY KLAWISZ, aby przerwać.");
 
-            // POPRAWKA #5: Poprawne zatrzymywanie przez klawisz – działa w pętli, nie jednorazowo
+            // ✅ POPRAWKA: Pętla oczekiwania na klawisz bez natychmiastowego Cancel()
             var keyTask = Task.Run(() =>
             {
-                Console.ReadKey(true);
-                cts.Cancel();
+                while (!cts.IsCancellationRequested)
+                {
+                    if (Console.KeyAvailable)
+                    {
+                        Console.ReadKey(true);
+                        cts.Cancel();
+                        break;
+                    }
+                    Thread.Sleep(100); // Małe opóźnienie, żeby nie obciążać procesora
+                }
             });
 
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(duration), cts.Token);
+            try 
+            { 
+                await Task.Delay(TimeSpan.FromSeconds(duration), cts.Token); 
             }
-            catch (TaskCanceledException)
-            {
-                // Zatrzymano przez użytkownika lub upłynął czas – oba przypadki są OK
-            }
+            catch (TaskCanceledException) { }
 
-            cts.Cancel(); // Upewnij się, że cancel jest wywołany niezależnie od powodu wyjścia
+            cts.Cancel(); 
             sw.Stop();
             await Task.WhenAll(tasks);
 
@@ -119,59 +108,39 @@ namespace XtremeLoadTester
 
         private static async Task DoWork(string url, string method, CancellationToken ct)
         {
-            var requestSw = new Stopwatch();
             var random = new Random(Guid.NewGuid().GetHashCode());
+            string ua = userAgents[random.Next(userAgents.Length)];
 
             while (!ct.IsCancellationRequested)
             {
-                requestSw.Restart();
+                var requestSw = Stopwatch.StartNew();
                 try
                 {
-                    HttpResponseMessage response;
+                    using var request = new HttpRequestMessage(new HttpMethod(method), url);
+                    request.Headers.UserAgent.ParseAdd(ua);
+                    
                     if (method == "POST")
+                        request.Content = JsonContent.Create(new { ts = DateTime.UtcNow, rand = random.Next() });
+
+                    using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                    requestSw.Stop();
+
+                    Interlocked.Increment(ref totalRequests);
+                    if (response.IsSuccessStatusCode)
                     {
-                        var payload = new { id = random.Next(1, 10000), ts = DateTime.UtcNow, msg = "test" };
-                        response = await client.PostAsJsonAsync(url, payload, ct);
+                        Interlocked.Increment(ref successCount);
+                        if (totalRequests % 20 == 0) latencyQueue.Enqueue(requestSw.ElapsedMilliseconds);
                     }
                     else
                     {
-                        response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-                    }
-
-                    using (response)
-                    {
-                        requestSw.Stop();
-                        Interlocked.Increment(ref totalRequests);
-                        if (response.IsSuccessStatusCode)
-                        {
-                            Interlocked.Increment(ref successCount);
-                            // Sampling: co 20-ste zapytanie do statystyk latencji
-                            if (Interlocked.Read(ref totalRequests) % 20 == 0)
-                                latencyQueue.Enqueue(requestSw.ElapsedMilliseconds);
-                        }
-                        else
-                        {
-                            Interlocked.Increment(ref errorCount);
-                        }
+                        TrackError($"HTTP {(int)response.StatusCode}");
+                        Interlocked.Increment(ref errorCount);
                     }
                 }
-                // POPRAWKA #6: Nie liczymy OperationCanceledException jako błędu – to normalne zatrzymanie
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex)
                 {
-                    // Wyjście z pętli bez inkrementacji errorCount
-                    break;
-                }
-                catch (Exception ex) when (
-                    ex is HttpRequestException ||
-                    ex is TaskCanceledException    // TaskCanceledException z powodu Timeout HttpClient
-                )
-                {
-                    Interlocked.Increment(ref errorCount);
-                    Interlocked.Increment(ref totalRequests);
-                }
-                catch
-                {
-                    // Nieoczekiwany wyjątek – nadal liczymy jako błąd, ale nie crashujemy workera
+                    TrackError(ex is TaskCanceledException ? "Timeout" : "Błąd sieci");
                     Interlocked.Increment(ref errorCount);
                     Interlocked.Increment(ref totalRequests);
                 }
@@ -181,53 +150,23 @@ namespace XtremeLoadTester
         private static void PrintSummary(TimeSpan elapsed, string url)
         {
             var l = latencyQueue.OrderBy(x => x).ToList();
-            string report = "\n\n" + new string('=', 55) + "\n";
-            report += "📊 FINAL REPORT\n";
-            report += $"Target:          {url}\n";
-            report += $"Total Requests:  {totalRequests}\n";
-            report += $"Success:         {successCount}\n";
-            report += $"Errors:          {errorCount}";
+            Console.WriteLine("\n\n" + new string('=', 55));
+            Console.WriteLine($"📊 RAPORT KOŃCOWY: {url}");
+            Console.WriteLine($"Zapytań: {totalRequests} | RPS: {totalRequests / elapsed.TotalSeconds:F0}");
+            Console.WriteLine($"Sukcesy: {successCount} | Błędy: {errorCount}");
+            
+            if (l.Any()) 
+                Console.WriteLine($"Latencja p95: {l[(int)(l.Count * 0.95)]}ms | p99: {l[(int)(l.Count * 0.99)]}ms");
 
-            if (totalRequests > 0)
-                report += $" ({(double)errorCount / totalRequests * 100.0:F1}%)";
-
-            report += "\n";
-            report += $"Elapsed:         {elapsed.TotalSeconds:F1}s\n";
-            report += $"Average RPS:     {totalRequests / (elapsed.TotalSeconds > 0 ? elapsed.TotalSeconds : 1):F0}\n";
-
-            if (l.Any())
+            if (errorBreakdown.Any())
             {
-                report += $"p50 Latency:     {Percentile(l, 0.50)}ms\n";
-                report += $"p95 Latency:     {Percentile(l, 0.95)}ms\n";
-                report += $"p99 Latency:     {Percentile(l, 0.99)}ms\n";
-                report += $"Min Latency:     {l.First()}ms\n";
-                report += $"Max Latency:     {l.Last()}ms\n";
+                Console.WriteLine("\n📋 ROZBICIE BŁĘDÓW:");
+                foreach (var kv in errorBreakdown) Console.WriteLine($"  {kv.Value}x {kv.Key}");
             }
-            else
-            {
-                report += "Latency:         (brak próbek – za mało requestów)\n";
-            }
-
-            report += new string('=', 55);
-
-            Console.WriteLine(report);
-
-            // Zapis do pliku
-            try
-            {
-                File.AppendAllText("stress_test_report.txt", $"\n[{DateTime.Now}]{report}");
-                Console.WriteLine("\n[✔] Raport zapisany do stress_test_report.txt");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"\n[✘] Nie udało się zapisać raportu: {ex.Message}");
-            }
-
-            Console.WriteLine("Naciśnij dowolny klawisz, aby wyjść...");
+            Console.WriteLine(new string('=', 55));
             Console.ReadKey();
         }
 
-        // POPRAWKA #7: Pomocnicza metoda percentyla – czystsza niż inline obliczenia
         private static long Percentile(List<long> sortedList, double percentile)
         {
             if (!sortedList.Any()) return 0;
