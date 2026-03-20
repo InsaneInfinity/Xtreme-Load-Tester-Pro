@@ -1,0 +1,14 @@
+metric,value
+url,https://arctica.pl/
+duration_s,40,0
+total_requests,9
+avg_rps,0
+success,9
+errors,0
+success_pct,100,0
+p50_ms,3442
+p90_ms,5060
+p95_ms,5513
+p99_ms,5513
+max_ms,5513
+latency_samples,10

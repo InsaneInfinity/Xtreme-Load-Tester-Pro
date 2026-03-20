@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.IO;
 
 namespace XtremeLoadTester
 {
@@ -23,155 +22,124 @@ namespace XtremeLoadTester
         private static long totalRequests = 0;
         private static long successCount = 0;
         private static long errorCount = 0;
+        private static long latencySampleCount = 0;
         private static readonly ConcurrentQueue<long> latencyQueue = new ConcurrentQueue<long>();
         private static readonly ConcurrentDictionary<string, long> errorBreakdown = new ConcurrentDictionary<string, long>();
 
-        private static readonly string[] userAgents = new string[]
-        {
+        private static readonly string[] userAgents = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
             "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/605.1.15"
         };
 
-        private static void TrackError(string key) =>
-            errorBreakdown.AddOrUpdate(key, 1, (_, old) => old + 1);
-
         static async Task Main(string[] args)
         {
             Console.Clear();
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine("🚀 XTREME LOAD TESTER v4.2.1 | Stable Release");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("🚀 XTREME LOAD TESTER v4.6.0 | Pure Power Edition");
             Console.WriteLine("--------------------------------------------------");
             Console.ResetColor();
 
-            Console.Write("🌐 Target URL: "); string url = Console.ReadLine() ?? "https://example.com";
-            Console.Write("🛠 Method (GET/POST): "); string method = Console.ReadLine()?.ToUpper() ?? "GET";
-            Console.Write("🧵 Concurrent Workers: "); int.TryParse(Console.ReadLine(), out int workersCount);
-            if (workersCount <= 0) workersCount = 50;
+            Console.Write("🌐 Target URL: ");
+            string url = Console.ReadLine()?.Trim() ?? "";
+            if (!url.StartsWith("http")) url = "https://" + url;
 
-            Console.Write("⏱ Duration (seconds): "); int.TryParse(Console.ReadLine(), out int duration);
-            if (duration <= 0) duration = 30;
+            Console.Write("🧵 Workers: ");
+            int.TryParse(Console.ReadLine(), out int workersCount);
 
-            Console.Write("⏳ Request Timeout (seconds): "); int.TryParse(Console.ReadLine(), out int timeoutSeconds);
-            if (timeoutSeconds <= 0) timeoutSeconds = 15;
-            client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+            Console.Write("⏳ Timeout (s): ");
+            int.TryParse(Console.ReadLine(), out int timeout);
 
+            Console.Write("🕵️ Stealth Delay (min max ms): ");
+            string[] delays = Console.ReadLine()?.Split(' ') ?? new[] { "0", "0" };
+            int.TryParse(delays[0], out int minDelay);
+            int.TryParse(delays.Length > 1 ? delays[1] : "0", out int maxDelay);
+
+            Console.Write("⏱ Duration (s): ");
+            int.TryParse(Console.ReadLine(), out int duration);
+
+            Console.WriteLine("\n[!] Test startuje... Naciśnij dowolny klawisz, aby przerwać.");
+            
             using var cts = new CancellationTokenSource();
             var sw = Stopwatch.StartNew();
 
             var tasks = Enumerable.Range(0, workersCount)
-                .Select(_ => Task.Run(() => DoWork(url, method, cts.Token)))
+                .Select(_ => Task.Run(() => DoWork(url, timeout, minDelay, maxDelay, cts.Token)))
                 .ToList();
 
-            // Monitoring Live
-            _ = Task.Run(async () =>
-            {
-                while (!cts.IsCancellationRequested)
-                {
+            _ = Task.Run(async () => {
+                long prev = 0;
+                while (!cts.IsCancellationRequested) {
                     await Task.Delay(1000);
-                    double elapsed = sw.Elapsed.TotalSeconds;
-                    long reqs = Interlocked.Read(ref totalRequests);
-                    Console.Write($"\r[LIVE] RPS: {reqs / (elapsed > 0 ? elapsed : 1):F0} | Success: {Interlocked.Read(ref successCount)} | Errors: {Interlocked.Read(ref errorCount)}   ");
+                    long cur = Interlocked.Read(ref totalRequests);
+                    Console.Write($"\r[LIVE] RPS: {cur - prev,5} | ✅ {Interlocked.Read(ref successCount),7} | ❌ {Interlocked.Read(ref errorCount),5} | ⏱ {Math.Max(0, duration - (int)sw.Elapsed.TotalSeconds),3}s  ");
+                    prev = cur;
                 }
             });
 
-            Console.WriteLine("\n[!] Test w toku... NACIŚNIJ DOWOLNY KLAWISZ, aby przerwać.");
-
-            // ✅ POPRAWKA: Pętla oczekiwania na klawisz bez natychmiastowego Cancel()
-            var keyTask = Task.Run(() =>
-            {
-                while (!cts.IsCancellationRequested)
-                {
-                    if (Console.KeyAvailable)
-                    {
-                        Console.ReadKey(true);
-                        cts.Cancel();
-                        break;
-                    }
-                    Thread.Sleep(100); // Małe opóźnienie, żeby nie obciążać procesora
-                }
-            });
-
-            try 
-            { 
-                await Task.Delay(TimeSpan.FromSeconds(duration), cts.Token); 
-            }
+            if (Console.KeyAvailable) Console.ReadKey(true);
+            try { await Task.Delay(TimeSpan.FromSeconds(duration), cts.Token); }
             catch (TaskCanceledException) { }
 
-            cts.Cancel(); 
-            sw.Stop();
+            cts.Cancel();
             await Task.WhenAll(tasks);
-
             PrintSummary(sw.Elapsed, url);
         }
 
-        private static async Task DoWork(string url, string method, CancellationToken ct)
+        private static async Task DoWork(string url, int timeout, int min, int max, CancellationToken ct)
         {
-            var random = new Random(Guid.NewGuid().GetHashCode());
-            string ua = userAgents[random.Next(userAgents.Length)];
-
+            var rnd = new Random(Guid.NewGuid().GetHashCode());
             while (!ct.IsCancellationRequested)
             {
                 var requestSw = Stopwatch.StartNew();
-                try
-                {
-                    using var request = new HttpRequestMessage(new HttpMethod(method), url);
-                    request.Headers.UserAgent.ParseAdd(ua);
-                    
-                    if (method == "POST")
-                        request.Content = JsonContent.Create(new { ts = DateTime.UtcNow, rand = random.Next() });
+                try {
+                    if (max > min) await Task.Delay(rnd.Next(min, max), ct);
 
-                    using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-                    requestSw.Stop();
+                    using var reqCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    reqCts.CancelAfter(TimeSpan.FromSeconds(timeout));
 
+                    using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                    req.Headers.UserAgent.ParseAdd(userAgents[rnd.Next(userAgents.Length)]);
+                    req.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
+                    req.Headers.Add("Referer", "https://www.google.com/");
+
+                    var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, reqCts.Token);
                     Interlocked.Increment(ref totalRequests);
-                    if (response.IsSuccessStatusCode)
-                    {
-                        Interlocked.Increment(ref successCount);
-                        if (totalRequests % 20 == 0) latencyQueue.Enqueue(requestSw.ElapsedMilliseconds);
-                    }
-                    else
-                    {
-                        TrackError($"HTTP {(int)response.StatusCode}");
+
+                    if (resp.IsSuccessStatusCode) Interlocked.Increment(ref successCount);
+                    else {
                         Interlocked.Increment(ref errorCount);
+                        TrackError($"HTTP {(int)resp.StatusCode}");
                     }
                 }
-                catch (OperationCanceledException) { break; }
-                catch (Exception ex)
-                {
-                    TrackError(ex is TaskCanceledException ? "Timeout" : "Błąd sieci");
-                    Interlocked.Increment(ref errorCount);
-                    Interlocked.Increment(ref totalRequests);
+                catch (Exception ex) {
+                    if (!ct.IsCancellationRequested) {
+                        Interlocked.Increment(ref totalRequests);
+                        Interlocked.Increment(ref errorCount);
+                        TrackError(ex is TaskCanceledException ? "Timeout" : "Błąd sieci");
+                    }
+                }
+                finally {
+                    requestSw.Stop();
+                    if (Interlocked.Increment(ref latencySampleCount) <= 100000)
+                        latencyQueue.Enqueue(requestSw.ElapsedMilliseconds);
                 }
             }
         }
 
-        private static void PrintSummary(TimeSpan elapsed, string url)
-        {
+        private static void TrackError(string key) => errorBreakdown.AddOrUpdate(key, 1, (_, old) => old + 1);
+
+        private static void PrintSummary(TimeSpan elapsed, string url) {
             var l = latencyQueue.OrderBy(x => x).ToList();
-            Console.WriteLine("\n\n" + new string('=', 55));
-            Console.WriteLine($"📊 RAPORT KOŃCOWY: {url}");
-            Console.WriteLine($"Zapytań: {totalRequests} | RPS: {totalRequests / elapsed.TotalSeconds:F0}");
-            Console.WriteLine($"Sukcesy: {successCount} | Błędy: {errorCount}");
-            
-            if (l.Any()) 
-                Console.WriteLine($"Latencja p95: {l[(int)(l.Count * 0.95)]}ms | p99: {l[(int)(l.Count * 0.99)]}ms");
-
-            if (errorBreakdown.Any())
-            {
-                Console.WriteLine("\n📋 ROZBICIE BŁĘDÓW:");
-                foreach (var kv in errorBreakdown) Console.WriteLine($"  {kv.Value}x {kv.Key}");
+            Console.WriteLine($"\n\n" + new string('=', 60));
+            Console.WriteLine($"📊 RAPORT PURE POWER v4.6.0\nTarget: {url}\nZapytań: {totalRequests}\nSukcesy: {successCount}\nBłędy: {errorCount}");
+            if (l.Any()) Console.WriteLine($"Latencja p50: {l[(int)(l.Count * 0.5)]}ms | p95: {l[(int)(l.Count * 0.95)]}ms | max: {l.Last()}ms");
+            if (errorBreakdown.Any()) {
+                Console.WriteLine("\n📋 BŁĘDY:");
+                foreach (var e in errorBreakdown) Console.WriteLine($" - {e.Key}: {e.Value}");
             }
-            Console.WriteLine(new string('=', 55));
-            Console.ReadKey();
-        }
-
-        private static long Percentile(List<long> sortedList, double percentile)
-        {
-            if (!sortedList.Any()) return 0;
-            int index = (int)Math.Ceiling(percentile * sortedList.Count) - 1;
-            return sortedList[Math.Max(0, Math.Min(index, sortedList.Count - 1))];
+            Console.WriteLine(new string('=', 60));
+            Console.ReadLine();
         }
     }
 }

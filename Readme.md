@@ -1,30 +1,33 @@
-# 🚀 Xtreme Load Tester v4.2.1 | Professional Diagnostic Edition
+# 🚀 Xtreme Load Tester v4.6.0 | Pure Power & Stealth Edition
 
-High-performance HTTP stress testing and infrastructure diagnostic tool built with **C# and .NET 8**. Designed to identify bottlenecks and test WAF resilience.
+High-performance HTTP stress testing and infrastructure diagnostic tool built with **C# and .NET 10**. Engineered to identify bottlenecks, test WAF resilience, and simulate real-world browser traffic.
 
-## ✨ New in v4.2.1
-* **🕵️ Advanced Error Breakdown:** Real-time tracking of HTTP status codes (e.g., 429 Too Many Requests, 503 Service Unavailable).
-* **🎭 Dynamic User-Agent Masking:** Randomly rotates between 9+ modern browser signatures (Chrome, Firefox, Safari, iOS/Android) to bypass basic filters.
-* **📊 Precision Latency Sampling:** Accurate p50, p95, and p99 metrics using thread-safe telemetry collection.
-* **🛡️ Connection Resilience:** Optimized `SocketsHttpHandler` with connection pooling to prevent socket exhaustion.
+## ✨ New in v4.6.0 "Pure Power"
+* **🕵️ Ghost Mode 2.0:** Enhanced header spoofing (`Sec-Fetch`, `Accept-Language`, `Referer`) to bypass advanced WAF fingerprinting.
+* **⚡ Atomic Telemetry:** Transitioned to `Interlocked` counters for O(1) performance, allowing millions of requests without local overhead.
+* **📊 Precision Latency Sampling:** Accurate **p50, p95, and p99** metrics using thread-safe telemetry collection and optimized percentile algorithms.
+* **🛡️ Connection Resilience:** Fine-tuned `SocketsHttpHandler` with connection pooling to prevent socket exhaustion at high concurrency.
+* **🧩 Smart URL Handling:** Automatic protocol completion (http/https) and robust exception handling for network resets.
 
 ## 🛠 Diagnostics & Status Codes
-This tool helps identify how a server fails under pressure:
-- **HTTP 429/403**: Active Rate Limiting / WAF Block (IP-based).
-- **HTTP 503/504**: Resource Exhaustion (CPU/RAM/Database bottleneck).
-- **Timeout**: Network saturation or complete service hang.
+This tool provides deep insights into how a server behaves under heavy load:
+- **HTTP 429/403**: Active Rate Limiting or WAF intervention (IP-based blocking).
+- **HTTP 503/504**: Resource Exhaustion (CPU/RAM or Database bottleneck).
+- **Network Reset / Timeout**: Complete service hang or firewall-level packet dropping.
 
-## 🚀 How to Run
+## 🚀 Getting Started
 1. **Clone:** `git clone https://github.com/YourNick/XtremeLoadTester.git`
-2. **Build:** `dotnet build -c Release`
-3. **Execute:** `dotnet run -c Release`
+2. **Setup:** Ensure you have .NET 10 SDK installed.
+3. **Build:** `dotnet build -c Release`
+4. **Execute:** `dotnet run -c Release`
 
-## 📈 Proven Benchmarks
+## 📈 Technical Benchmarks
 | Metric | Capacity |
 | :--- | :--- |
-| **Max Throughput** | 15,000+ RPS |
-| **Concurrent Workers** | Tested up to 10,000 |
-| **Telemetry** | p50, p95, p99, Min/Max |
+| **Max Throughput** | 20,000+ RPS (Link speed dependent) |
+| **Concurrent Workers** | Scalable up to 15,000+ threads |
+| **Telemetry** | Real-time p50, p95, p99 & Error Breakdown |
+| **Compatibility** | Windows, Linux, macOS (Cross-platform .NET) |
 
 ---
-> **Disclaimer:** This tool is for authorized performance testing and educational purposes only.
+> **Disclaimer:** This tool is for authorized performance testing and educational purposes only. The author is not responsible for any misuse or damage caused by this software. Use it responsibly on infrastructure you own or have explicit permission to test.

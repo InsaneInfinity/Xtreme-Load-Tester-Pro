@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("XtremeLoadTester")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5821a396fe3693bb435bc9fcecbbc16eab28adc3")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ba242eb5559269c3058955a48643279eaefb35cf")]
 [assembly: System.Reflection.AssemblyProductAttribute("XtremeLoadTester")]
 [assembly: System.Reflection.AssemblyTitleAttribute("XtremeLoadTester")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

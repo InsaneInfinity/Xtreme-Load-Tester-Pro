@@ -1,0 +1,17 @@
+
+[20.03.2026 19:23:28]
+
+=======================================================
+📊 FINAL REPORT
+Target:          https://skala64.pl
+Total Requests:  4315
+Success:         82
+Errors:          4233 (98,1%)
+Elapsed:         20,0s
+Average RPS:     216
+p50 Latency:     3951ms
+p95 Latency:     7534ms
+p99 Latency:     7534ms
+Min Latency:     3951ms
+Max Latency:     7534ms
+=======================================================
