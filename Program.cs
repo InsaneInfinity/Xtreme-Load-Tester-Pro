@@ -1,109 +1,125 @@
 using System;
+using System.Diagnostics;
 using System.Net.Http;
+using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.Linq;
 
 namespace XtremeLoadTester
 {
     class Program
     {
-        // Statistics
-        private static int _successCount = 0;
-        private static int _failCount = 0;
-        private static long _totalResponseTime = 0;
+        // High-performance HttpClient configured for socket reuse
+        private static readonly HttpClient client = new HttpClient(new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+            MaxConnectionsPerServer = 10000,
+            EnableMultipleHttp2Connections = true
+        });
+
+        private static long totalRequests = 0;
+        private static long successCount = 0;
+        private static long errorCount = 0;
+        private static readonly ConcurrentQueue<long> latencyQueue = new ConcurrentQueue<long>();
 
         static async Task Main(string[] args)
         {
+            Console.Clear();
             Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine("========================================");
-            Console.WriteLine("    XTREME LOAD TESTER PRO v2.0         ");
-            Console.WriteLine("========================================");
+            Console.WriteLine("🚀 XTREME LOAD TESTER v4.0 | Professional Edition");
+            Console.WriteLine("--------------------------------------------------");
             Console.ResetColor();
 
-            Console.Write("Enter Target URL (e.g., https://example.com): ");
-            string targetUrl = Console.ReadLine();
+            // Configuration
+            Console.Write("🌐 Target URL: "); string url = Console.ReadLine() ?? "https://example.com";
+            Console.Write("🛠 Method (GET/POST): "); string method = Console.ReadLine()?.ToUpper() ?? "GET";
+            Console.Write("🧵 Concurrent Workers: "); int workersCount = int.Parse(Console.ReadLine() ?? "50");
+            Console.Write("⏱ Duration (seconds): "); int duration = int.Parse(Console.ReadLine() ?? "30");
 
-            Console.Write("Enter Thread Count (Concurrent Tasks): ");
-            if (!int.TryParse(Console.ReadLine(), out int threadCount)) threadCount = 10;
+            using var cts = new CancellationTokenSource();
+            var sw = Stopwatch.StartNew();
 
-            Console.Write("Enter Duration in seconds: ");
-            if (!int.TryParse(Console.ReadLine(), out int duration)) duration = 30;
+            // Fire up workers
+            var tasks = Enumerable.Range(0, workersCount)
+                .Select(_ => Task.Run(() => DoWork(url, method, cts.Token)))
+                .ToList();
 
-            Console.WriteLine($"\n[!] Starting Load Test on {targetUrl}...");
-            Console.WriteLine($"[!] Threads: {threadCount} | Duration: {duration}s\n");
+            // Live UI Monitoring
+            _ = Task.Run(async () => {
+                while (!cts.IsCancellationRequested)
+                {
+                    await Task.Delay(1000);
+                    double elapsed = sw.Elapsed.TotalSeconds;
+                    long reqs = Interlocked.Read(ref totalRequests);
+                    Console.Write($"\r[LIVE] RPS: {reqs / elapsed:F0} | Success: {Interlocked.Read(ref successCount)} | Errors: {Interlocked.Read(ref errorCount)}   ");
+                }
+            });
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(duration));
-            var tasks = new List<Task>();
-
-            // Warm up HttpClient
-            using var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("User-Agent", "XtremeLoadTester/2.0");
-
-            Stopwatch sw = Stopwatch.StartNew();
-
-            for (int i = 0; i < threadCount; i++)
-            {
-                tasks.Add(Task.Run(() => Worker(client, targetUrl, cts.Token)));
-            }
-
-            // Real-time monitor loop
-            while (!cts.IsCancellationRequested)
-            {
-                await Task.Delay(1000);
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.Write($"\rRequests: Success={_successCount} | Failed={_failCount} | Elapsed={sw.Elapsed.Seconds}s");
-            }
-
-            await Task.WhenAll(tasks);
+            // Wait for time or keypress
+            Console.WriteLine("\n[!] Stress test running... Press any key to stop early.");
+            await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(duration)), Task.Run(() => Console.ReadKey(true)));
+            
+            cts.Cancel();
             sw.Stop();
+            await Task.WhenAll(tasks);
 
-            // Final Report
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("\n\n========================================");
-            Console.WriteLine("           TEST COMPLETED               ");
-            Console.WriteLine("========================================");
-            Console.WriteLine($"Total Successful Requests: {_successCount}");
-            Console.WriteLine($"Total Failed Requests:     {_failCount}");
-            
-            if (_successCount > 0)
-            {
-                double avgTime = (double)_totalResponseTime / _successCount;
-                Console.WriteLine($"Average Response Time:     {avgTime:F2} ms");
-            }
-            Console.WriteLine("========================================\n");
-            Console.ResetColor();
-            
-            Console.WriteLine("Press any key to exit...");
-            Console.ReadKey();
+            PrintSummary(sw.Elapsed);
         }
 
-        private static async Task Worker(HttpClient client, string url, CancellationToken token)
+        private static async Task DoWork(string url, string method, CancellationToken ct)
         {
-            while (!token.IsCancellationRequested)
+            var requestSw = new Stopwatch();
+            var random = new Random(Guid.NewGuid().GetHashCode());
+
+            while (!ct.IsCancellationRequested)
             {
-                var sw = Stopwatch.StartNew();
+                requestSw.Restart();
                 try
                 {
-                    var response = await client.GetAsync(url, token);
-                    sw.Stop();
-
-                    if (response.IsSuccessStatusCode)
+                    HttpResponseMessage response;
+                    if (method == "POST")
                     {
-                        Interlocked.Increment(ref _successCount);
-                        Interlocked.Add(ref _totalResponseTime, sw.ElapsedMilliseconds);
+                        var payload = new { id = random.Next(1, 10000), ts = DateTime.UtcNow, msg = "test" };
+                        response = await client.PostAsJsonAsync(url, payload, ct);
                     }
                     else
                     {
-                        Interlocked.Increment(ref _failCount);
+                        response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+                    }
+
+                    using (response)
+                    {
+                        requestSw.Stop();
+                        Interlocked.Increment(ref totalRequests);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            Interlocked.Increment(ref successCount);
+                            if (totalRequests % 20 == 0) latencyQueue.Enqueue(requestSw.ElapsedMilliseconds);
+                        }
+                        else Interlocked.Increment(ref errorCount);
                     }
                 }
-                catch
-                {
-                    Interlocked.Increment(ref _failCount);
-                }
+                catch { Interlocked.Increment(ref errorCount); Interlocked.Increment(ref totalRequests); }
             }
+        }
+
+        private static void PrintSummary(TimeSpan elapsed)
+        {
+            var l = latencyQueue.OrderBy(x => x).ToList();
+            Console.WriteLine("\n\n" + new string('=', 50));
+            Console.WriteLine("📊 FINAL REPORT");
+            Console.WriteLine($"Total Requests: {totalRequests}");
+            Console.WriteLine($"Average RPS: {totalRequests / elapsed.TotalSeconds:F0}");
+            if (l.Any())
+            {
+                Console.WriteLine($"p50 Latency: {l[l.Count/2]}ms");
+                Console.WriteLine($"p95 Latency: {l[(int)(l.Count*0.95)]}ms");
+                Console.WriteLine($"p99 Latency: {l[(int)(l.Count*0.99)]}ms");
+            }
+            Console.WriteLine(new string('=', 50));
         }
     }
 }
