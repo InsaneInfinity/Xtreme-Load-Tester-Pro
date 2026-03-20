@@ -1,4 +1,4 @@
-# 🚀 Xtreme Load Tester Pro
+# 🚀 Xtreme Load Tester Pro v4.1
 
 A high-performance, asynchronous HTTP stress testing tool built with **C# and .NET**. Designed for massive throughput and minimal resource overhead using modern asynchronous patterns.
 
@@ -27,8 +27,9 @@ A high-performance, asynchronous HTTP stress testing tool built with **C# and .N
 | Metric | Value |
 | :--- | :--- |
 | **Max RPS** | 15,000+ |
+| **Average p50** | 45ms |
 | **Average p95** | 120ms |
 | **Average p99** | 350ms |
 
 ---
-*Disclaimer: This tool is for educational and authorized testing purposes only.*
+> **Disclaimer:** This tool is for educational and authorized testing purposes only. Using it against targets without permission is illegal.
