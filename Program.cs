@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 using System;
+=======
+﻿using System;
+>>>>>>> 9202dca (Upgrade to Xtreme Load Tester v4.0 Professional Edition with Latency Stats)
 using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -122,4 +126,8 @@ namespace XtremeLoadTester
             Console.WriteLine(new string('=', 50));
         }
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 9202dca (Upgrade to Xtreme Load Tester v4.0 Professional Edition with Latency Stats)
