@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 using System;
-=======
-﻿using System;
->>>>>>> 9202dca (Upgrade to Xtreme Load Tester v4.0 Professional Edition with Latency Stats)
 using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -16,7 +12,6 @@ namespace XtremeLoadTester
 {
     class Program
     {
-        // High-performance HttpClient configured for socket reuse
         private static readonly HttpClient client = new HttpClient(new SocketsHttpHandler
         {
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
@@ -37,7 +32,6 @@ namespace XtremeLoadTester
             Console.WriteLine("--------------------------------------------------");
             Console.ResetColor();
 
-            // Configuration
             Console.Write("🌐 Target URL: "); string url = Console.ReadLine() ?? "https://example.com";
             Console.Write("🛠 Method (GET/POST): "); string method = Console.ReadLine()?.ToUpper() ?? "GET";
             Console.Write("🧵 Concurrent Workers: "); int workersCount = int.Parse(Console.ReadLine() ?? "50");
@@ -46,12 +40,10 @@ namespace XtremeLoadTester
             using var cts = new CancellationTokenSource();
             var sw = Stopwatch.StartNew();
 
-            // Fire up workers
             var tasks = Enumerable.Range(0, workersCount)
                 .Select(_ => Task.Run(() => DoWork(url, method, cts.Token)))
                 .ToList();
 
-            // Live UI Monitoring
             _ = Task.Run(async () => {
                 while (!cts.IsCancellationRequested)
                 {
@@ -62,7 +54,6 @@ namespace XtremeLoadTester
                 }
             });
 
-            // Wait for time or keypress
             Console.WriteLine("\n[!] Stress test running... Press any key to stop early.");
             await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(duration)), Task.Run(() => Console.ReadKey(true)));
             
@@ -124,10 +115,8 @@ namespace XtremeLoadTester
                 Console.WriteLine($"p99 Latency: {l[(int)(l.Count*0.99)]}ms");
             }
             Console.WriteLine(new string('=', 50));
+            Console.WriteLine("Press any key to exit...");
+            Console.ReadKey();
         }
     }
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 9202dca (Upgrade to Xtreme Load Tester v4.0 Professional Edition with Latency Stats)
