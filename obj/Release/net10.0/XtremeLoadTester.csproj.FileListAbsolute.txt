@@ -1,0 +1,15 @@
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\obj\Release\net10.0\XtremeLoadTester.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\obj\Release\net10.0\XtremeLoadTester.AssemblyInfoInputs.cache
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\obj\Release\net10.0\XtremeLoadTester.AssemblyInfo.cs
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\obj\Release\net10.0\XtremeLoadTester.csproj.CoreCompileInputs.cache
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\obj\Release\net10.0\XtremeLoadTester.sourcelink.json
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\bin\Release\net10.0\XtremeLoadTester.exe
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\bin\Release\net10.0\XtremeLoadTester.deps.json
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\bin\Release\net10.0\XtremeLoadTester.runtimeconfig.json
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\bin\Release\net10.0\XtremeLoadTester.dll
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\bin\Release\net10.0\XtremeLoadTester.pdb
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\obj\Release\net10.0\XtremeLoadTester.dll
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\obj\Release\net10.0\refint\XtremeLoadTester.dll
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\obj\Release\net10.0\XtremeLoadTester.pdb
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\obj\Release\net10.0\XtremeLoadTester.genruntimeconfig.cache
+C:\Users\Patryk\Desktop\tesseract-5.5.2\test\XtremeLoadTester\obj\Release\net10.0\ref\XtremeLoadTester.dll
